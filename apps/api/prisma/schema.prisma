@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  wallet       Wallet?
+  createdAt    DateTime @default(now())
+}
+
+model Wallet {
+  id                   String        @id @default(uuid())
+  userId               String        @unique
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance              Decimal       @default(0) @db.Decimal(18, 2)
+  sentTransactions     Transaction[] @relation("Sender")
+  receivedTransactions Transaction[] @relation("Receiver")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+enum TransactionType {
+  DEPOSIT
+  TRANSFER
+  REVERSAL
+}
+
+enum TransactionStatus {
+  COMPLETED
+  REVERSED
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+  type             TransactionType
+  status           TransactionStatus @default(COMPLETED)
+  amount           Decimal           @db.Decimal(18, 2)
+  senderWalletId   String?
+  senderWallet     Wallet?           @relation("Sender", fields: [senderWalletId], references: [id])
+  receiverWalletId String
+  receiverWallet   Wallet            @relation("Receiver", fields: [receiverWalletId], references: [id])
+  reversalOfId     String?           @unique
+  reversalOf       Transaction?      @relation("ReversalLink", fields: [reversalOfId], references: [id])
+  reversedBy       Transaction?      @relation("ReversalLink")
+  idempotencyKey   String?           @unique
+  description      String?
+  createdAt        DateTime          @default(now())
+}
