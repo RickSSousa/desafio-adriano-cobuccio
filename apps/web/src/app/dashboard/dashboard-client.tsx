@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useTransition, useEffect, useState, useRef } from 'react';
+import { useActionState, useTransition, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -8,6 +8,7 @@ import {
   transferAction,
   reverseTransactionAction,
   logoutAction,
+  getTransactionsAction,
 } from '@/app/actions/wallet.actions';
 import type { Transaction } from '@/lib/api';
 import { Logo } from '@/components/ui/logo';
@@ -17,7 +18,10 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 
 interface DashboardClientProps {
   balance: string;
-  transactions: Transaction[];
+  initialTransactions: Transaction[];
+  initialHasMore: boolean;
+  initialTotal: number;
+  initialPage: number;
 }
 
 function formatCurrency(value: string) {
@@ -34,8 +38,23 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export function DashboardClient({ balance, transactions }: DashboardClientProps) {
+export function DashboardClient({
+  balance,
+  initialTransactions,
+  initialHasMore,
+  initialTotal,
+  initialPage,
+}: DashboardClientProps) {
   const router = useRouter();
+  const [transactions, setTransactions] = useState(initialTransactions);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [total, setTotal] = useState(initialTotal);
+  const [page, setPage] = useState(initialPage);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [debouncedFilter, setDebouncedFilter] = useState('');
+  const [filtering, setFiltering] = useState(false);
+  const skipFilterFetch = useRef(true);
   const [depositState, depositFormAction, depositPending] = useActionState(depositAction, {
     success: false,
   });
@@ -49,17 +68,57 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
   const wasTransferPending = useRef(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedFilter(filter.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [filter]);
+
+  const reloadTransactions = useCallback(async (search: string) => {
+    setFiltering(true);
+    const result = await getTransactionsAction(1, search);
+    setFiltering(false);
+
+    if (!result.success || !result.data) {
+      toast.error(result.error ?? 'Não foi possível filtrar transações');
+      return;
+    }
+
+    setTransactions(result.data.items);
+    setHasMore(result.data.hasMore);
+    setPage(result.data.page);
+    setTotal(result.data.total);
+  }, []);
+
+  useEffect(() => {
+    if (!debouncedFilter) {
+      setTransactions(initialTransactions);
+      setHasMore(initialHasMore);
+      setTotal(initialTotal);
+      setPage(initialPage);
+    }
+  }, [initialTransactions, initialHasMore, initialTotal, initialPage, debouncedFilter]);
+
+  useEffect(() => {
+    if (skipFilterFetch.current) {
+      skipFilterFetch.current = false;
+      return;
+    }
+
+    void reloadTransactions(debouncedFilter);
+  }, [debouncedFilter, reloadTransactions]);
+
+  useEffect(() => {
     if (wasDepositPending.current && !depositPending) {
       if (depositState.success) {
         toast.success('Depósito realizado!');
         setDepositAmountKey((key) => key + 1);
         router.refresh();
+        void reloadTransactions(debouncedFilter);
       } else if (depositState.error) {
         toast.error(depositState.error);
       }
     }
     wasDepositPending.current = depositPending;
-  }, [depositPending, depositState.success, depositState.error, router]);
+  }, [depositPending, depositState.success, depositState.error, router, debouncedFilter, reloadTransactions]);
 
   useEffect(() => {
     if (wasTransferPending.current && !transferPending) {
@@ -67,12 +126,31 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
         toast.success('Transferência realizada!');
         setTransferAmountKey((key) => key + 1);
         router.refresh();
+        void reloadTransactions(debouncedFilter);
       } else if (transferState.error) {
         toast.error(transferState.error);
       }
     }
     wasTransferPending.current = transferPending;
-  }, [transferPending, transferState.success, transferState.error, router]);
+  }, [transferPending, transferState.success, transferState.error, router, debouncedFilter, reloadTransactions]);
+
+  const handleLoadMore = () => {
+    startTransition(async () => {
+      setLoadingMore(true);
+      const result = await getTransactionsAction(page + 1, debouncedFilter);
+      setLoadingMore(false);
+
+      if (!result.success || !result.data) {
+        toast.error(result.error ?? 'Não foi possível carregar mais transações');
+        return;
+      }
+
+      setTransactions((current) => [...current, ...result.data!.items]);
+      setHasMore(result.data.hasMore);
+      setPage(result.data.page);
+      setTotal(result.data.total);
+    });
+  };
 
   const handleReverse = (transactionId: string) => {
     startTransition(async () => {
@@ -83,11 +161,13 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
       }
       toast.success('Transação revertida!');
       router.refresh();
+      void reloadTransactions(debouncedFilter);
     });
   };
 
   const balanceNumber = Number(balance);
   const isNegative = balanceNumber < 0;
+  const isFiltering = debouncedFilter.length > 0;
 
   return (
     <PageShell wide>
@@ -129,8 +209,9 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
             {formatCurrency(balance)}
           </p>
           <p className="mt-3 text-xs text-vault-500">
-            {transactions.length} transação{transactions.length !== 1 ? 'ões' : ''} registrada
-            {transactions.length !== 1 ? 's' : ''}
+            {isFiltering
+              ? `${total} encontrada${total !== 1 ? 's' : ''}`
+              : `${total} transação${total !== 1 ? 'ões' : ''} registrada${total !== 1 ? 's' : ''}`}
           </p>
         </div>
 
@@ -189,12 +270,40 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
       </section>
 
       <section className="card">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="heading-md">Histórico de transações</h2>
-          <span className="text-xs text-vault-500">Ledger append-only</span>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="heading-md">Histórico de transações</h2>
+            <span className="text-xs text-vault-500">Ledger append-only</span>
+          </div>
+          <div className="relative w-full sm:max-w-xs">
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-500"
+              aria-hidden
+            >
+              <path
+                fillRule="evenodd"
+                d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <input
+              type="search"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              className="input pl-9"
+              placeholder="Filtrar por descrição, tipo, status..."
+              aria-label="Filtrar transações"
+            />
+          </div>
         </div>
 
-        {transactions.length === 0 ? (
+        {filtering ? (
+          <div className="flex items-center justify-center py-12 text-sm text-vault-400">
+            Filtrando transações...
+          </div>
+        ) : transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-vault-800 text-vault-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-7 w-7" aria-hidden>
@@ -206,58 +315,79 @@ export function DashboardClient({ balance, transactions }: DashboardClientProps)
                 />
               </svg>
             </div>
-            <p className="text-sm text-muted">Nenhuma transação registrada ainda.</p>
-            <p className="mt-1 text-xs text-vault-500">Faça um depósito para começar.</p>
+            <p className="text-sm text-muted">
+              {isFiltering
+                ? 'Nenhuma transação encontrada para esse filtro.'
+                : 'Nenhuma transação registrada ainda.'}
+            </p>
+            {!isFiltering && (
+              <p className="mt-1 text-xs text-vault-500">Faça um depósito para começar.</p>
+            )}
           </div>
         ) : (
-          <div className="table-shell">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Tipo</th>
-                  <th>Valor</th>
-                  <th>Status</th>
-                  <th>Descrição</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((transaction) => (
-                  <tr key={transaction.id}>
-                    <td className="whitespace-nowrap font-mono text-xs text-vault-400">
-                      {formatDate(transaction.createdAt)}
-                    </td>
-                    <td>
-                      <TypeBadge type={transaction.type} />
-                    </td>
-                    <td className="font-semibold text-vault-100">
-                      {formatCurrency(transaction.amount)}
-                    </td>
-                    <td>
-                      <StatusBadge status={transaction.status} />
-                    </td>
-                    <td className="max-w-[200px] truncate text-vault-400">
-                      {transaction.description ?? '—'}
-                    </td>
-                    <td>
-                      {transaction.status === 'COMPLETED' && transaction.type !== 'REVERSAL' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleReverse(transaction.id)}
-                          className="btn-danger px-3 py-1.5 text-xs"
-                        >
-                          Reverter
-                        </button>
-                      ) : (
-                        <span className="text-vault-600">—</span>
-                      )}
-                    </td>
+          <>
+            <div className="table-shell">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Tipo</th>
+                    <th>Valor</th>
+                    <th>Status</th>
+                    <th>Descrição</th>
+                    <th>Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td className="whitespace-nowrap font-mono text-xs text-vault-400">
+                        {formatDate(transaction.createdAt)}
+                      </td>
+                      <td>
+                        <TypeBadge type={transaction.type} />
+                      </td>
+                      <td className="font-semibold text-vault-100">
+                        {formatCurrency(transaction.amount)}
+                      </td>
+                      <td>
+                        <StatusBadge status={transaction.status} />
+                      </td>
+                      <td className="max-w-[200px] truncate text-vault-400">
+                        {transaction.description ?? '—'}
+                      </td>
+                      <td>
+                        {transaction.status === 'COMPLETED' && transaction.type !== 'REVERSAL' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleReverse(transaction.id)}
+                            className="btn-danger px-3 py-1.5 text-xs"
+                          >
+                            Reverter
+                          </button>
+                        ) : (
+                          <span className="text-vault-600">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {hasMore && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="btn-secondary min-w-[180px]"
+                >
+                  {loadingMore ? 'Carregando...' : 'Carregar mais'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </PageShell>

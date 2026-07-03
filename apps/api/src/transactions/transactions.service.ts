@@ -11,6 +11,7 @@ import {
   IWalletRepository,
 } from '../wallet/repositories/wallet.repository.interface';
 import { DepositDto, TransferDto } from '../wallet/dto/wallet.dto';
+import { DEFAULT_TRANSACTIONS_PAGE_SIZE } from './dto/list-transactions.query.dto';
 import {
   TransactionNotFoundException,
   WalletNotFoundException,
@@ -114,9 +115,27 @@ export class TransactionsService {
     return this.formatTransaction(reversal);
   }
 
-  async listByUser(userId: string) {
-    const transactions = await this.transactionRepository.findByUserWallet(userId);
-    return transactions.map((t) => this.formatTransaction(t));
+  async listByUser(
+    userId: string,
+    page = 1,
+    take = DEFAULT_TRANSACTIONS_PAGE_SIZE,
+    search?: string,
+  ) {
+    const { items, total } = await this.transactionRepository.findByUserWalletPaginated(
+      userId,
+      page,
+      take,
+      search,
+    );
+
+    return {
+      items: items.map((t) => this.formatTransaction(t)),
+      page,
+      take,
+      total,
+      hasMore: page * take < total,
+      search: search ?? '',
+    };
   }
 
   private formatTransaction(transaction: {

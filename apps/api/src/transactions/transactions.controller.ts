@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
 import { DepositDto, TransferDto } from '../wallet/dto/wallet.dto';
+import { ListTransactionsQueryDto } from './dto/list-transactions.query.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, JwtPayload } from '../common/decorators/current-user.decorator';
 
@@ -13,9 +14,14 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List user transactions' })
-  list(@CurrentUser() user: JwtPayload) {
-    return this.transactionsService.listByUser(user.sub);
+  @ApiOperation({ summary: 'List user transactions (paginated)' })
+  list(@CurrentUser() user: JwtPayload, @Query() query: ListTransactionsQueryDto) {
+    return this.transactionsService.listByUser(
+      user.sub,
+      query.page,
+      query.take,
+      query.search,
+    );
   }
 
   @Post('deposit')

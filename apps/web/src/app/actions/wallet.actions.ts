@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { apiRequest, ActionResult, AuthTokens, User, WalletBalance, Transaction } from '@/lib/api';
+import { apiRequest, ActionResult, AuthTokens, User, WalletBalance, Transaction, PaginatedTransactions } from '@/lib/api';
 import { setAuthCookies, clearAuthCookies, getAccessToken } from '@/lib/auth-cookies';
 
 const registerSchema = z.object({
@@ -98,13 +98,22 @@ export async function getBalanceAction(): Promise<ActionResult<WalletBalance>> {
   });
 }
 
-export async function getTransactionsAction(): Promise<ActionResult<Transaction[]>> {
+export async function getTransactionsAction(
+  page = 1,
+  search = '',
+): Promise<ActionResult<PaginatedTransactions>> {
   const accessToken = await getAccessToken();
   if (!accessToken) {
     return { success: false, error: 'Not authenticated' };
   }
 
-  return apiRequest<Transaction[]>('/transactions', {
+  const params = new URLSearchParams({ page: String(page) });
+  const trimmedSearch = search.trim();
+  if (trimmedSearch) {
+    params.set('search', trimmedSearch);
+  }
+
+  return apiRequest<PaginatedTransactions>(`/transactions?${params}`, {
     method: 'GET',
     accessToken,
   });

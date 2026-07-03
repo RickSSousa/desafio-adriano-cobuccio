@@ -8,7 +8,12 @@ export type TransactionWithWallets = Transaction & {
 export interface ITransactionRepository {
   findById(id: string): Promise<TransactionWithWallets | null>;
   findByIdempotencyKey(key: string): Promise<Transaction | null>;
-  findByUserWallet(userId: string): Promise<TransactionWithWallets[]>;
+  findByUserWalletPaginated(
+    userId: string,
+    page: number,
+    take: number,
+    search?: string,
+  ): Promise<{ items: TransactionWithWallets[]; total: number }>;
   create(
     tx: Prisma.TransactionClient,
     data: {

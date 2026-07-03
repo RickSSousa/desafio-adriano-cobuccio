@@ -19,7 +19,7 @@ describe('TransactionsService', () => {
   const transactionRepository = {
     findByIdempotencyKey: jest.fn(),
     findById: jest.fn(),
-    findByUserWallet: jest.fn(),
+    findByUserWalletPaginated: jest.fn(),
   };
   const walletRepository = {
     findByEmail: jest.fn(),

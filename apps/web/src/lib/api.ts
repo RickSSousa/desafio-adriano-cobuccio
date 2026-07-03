@@ -36,6 +36,17 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface PaginatedTransactions {
+  items: Transaction[];
+  page: number;
+  take: number;
+  total: number;
+  hasMore: boolean;
+  search: string;
+}
+
+export const TRANSACTIONS_PAGE_SIZE = 5;
+
 export interface WalletBalance {
   id: string;
   userId: string;
