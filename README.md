@@ -4,15 +4,15 @@ Aplicação fullstack de carteira financeira com cadastro, autenticação JWT, d
 
 ## Stack
 
-| Camada | Tecnologia |
-|--------|------------|
-| Backend | NestJS 11 + TypeScript |
-| Frontend | Next.js 16 (App Router + Server Actions) |
-| Banco | PostgreSQL + Prisma ORM |
-| Auth | JWT (access + refresh) em cookies httpOnly |
-| Hash de senha | argon2 |
-| Monorepo | pnpm workspaces |
-| Infra | Docker Compose |
+| Camada        | Tecnologia                                 |
+| ------------- | ------------------------------------------ |
+| Backend       | NestJS 11 + TypeScript                     |
+| Frontend      | Next.js 16 (App Router + Server Actions)   |
+| Banco         | PostgreSQL + Prisma ORM                    |
+| Auth          | JWT (access + refresh) em cookies httpOnly |
+| Hash de senha | argon2                                     |
+| Monorepo      | pnpm workspaces                            |
+| Infra         | Docker Compose                             |
 
 ## Arquitetura
 
@@ -53,6 +53,7 @@ docker compose up --build
 ```
 
 Acesse:
+
 - Frontend: http://localhost:3000
 - API: http://localhost:3001/api
 - Swagger: http://localhost:3001/api/docs
@@ -102,77 +103,3 @@ Use este fluxo para validar tudo antes ou durante a entrevista:
 7. **Reversão** — clique em "Reverter" na transferência; saldos voltam ao estado anterior
 8. **Swagger** — teste os mesmos endpoints em http://localhost:3001/api/docs
 9. **Health** — confirme http://localhost:3001/api/health retorna `status: ok`
-
-### Script rápido (Windows)
-
-Com Docker Desktop aberto:
-
-```powershell
-.\scripts\start-interview.ps1
-```
-
-## O que explicar no code review
-
-### Por que NestJS + Next.js separados?
-- NestJS expõe API REST documentada (Swagger) e regras de negócio testáveis
-- Next.js atua como BFF: Server Actions + cookies httpOnly protegem o JWT
-
-### Por que ledger append-only?
-- Transações financeiras precisam de audit trail
-- Reversão = nova transação compensatória, nunca DELETE
-- Permite rastrear inconsistências e quem solicitou a reversão
-
-### Por que Strategy pattern?
-- Cada tipo de operação (depósito, transferência, reversão) tem regras distintas
-- Open/Closed: adicionar novo tipo sem alterar `TransactionsService`
-
-### Por que lock pessimista?
-- Duas transferências simultâneas do mesmo saldo causariam double-spend
-- `SELECT ... FOR UPDATE` dentro de `prisma.$transaction` garante atomicidade
-
-### Por que saldo negativo é permitido?
-- Requisito do desafio: depósito soma ao valor atual mesmo se negativo
-- Cenário real: reversão de transferência quando o destinatário já gastou o valor
-
-### Segurança
-- argon2id para senhas (OWASP)
-- JWT nunca no localStorage (XSS)
-- Rate limiting em auth
-- Validação whitelist nos DTOs
-- Autorização por recurso (só vê próprias transações)
-
-## Endpoints principais
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| POST | `/api/auth/register` | Cadastro + criação de wallet |
-| POST | `/api/auth/login` | Login |
-| GET | `/api/wallet/balance` | Saldo da carteira |
-| POST | `/api/transactions/deposit` | Depósito |
-| POST | `/api/transactions/transfer` | Transferência |
-| POST | `/api/transactions/:id/reverse` | Reversão |
-| GET | `/api/transactions` | Histórico |
-
-## Segurança
-
-- Senhas com **argon2id**
-- JWT nunca exposto ao browser (cookies `httpOnly`)
-- Rate limiting em login/registro
-- Helmet + CORS restrito
-- Validação de entrada com whitelist
-- Autorização por recurso (usuário só acessa própria wallet/transações)
-
-## Decisões de design (para o code review)
-
-1. **Ledger append-only** — auditabilidade e reversão sem perder histórico
-2. **Strategy pattern** — novos tipos de transação sem alterar service existente
-3. **Repository interfaces** — Dependency Inversion, facilita testes unitários
-4. **Next.js como BFF** — Server Actions + cookies httpOnly eliminam XSS em tokens
-5. **Prisma Decimal** — precisão monetária (sem float)
-
-## Próximos passos (fora do escopo)
-
-- Observabilidade completa (OpenTelemetry, Prometheus/Grafana)
-- CI/CD pipeline
-- Refresh token rotation com blacklist
-- Notificações em tempo real
