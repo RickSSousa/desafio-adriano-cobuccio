@@ -3,42 +3,83 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 import { registerAction } from '@/app/actions/wallet.actions';
+import { Logo } from '@/components/ui/logo';
+import { PageShell } from '@/components/ui/page-shell';
 
 export default function RegisterPage() {
   const [state, formAction, pending] = useActionState(registerAction, { success: false });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md items-center px-4">
-      <div className="card w-full">
-        <h1 className="text-2xl font-bold">Criar conta</h1>
-        <p className="mt-1 text-sm text-slate-600">Sua carteira será criada automaticamente</p>
+    <PageShell centered>
+      <div className="w-full animate-slide-up">
+        <div className="mb-8 flex justify-center">
+          <Logo size="lg" />
+        </div>
 
-        <form action={formAction} className="mt-6 space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Nome</label>
-            <input name="name" type="text" required className="input" placeholder="Seu nome" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">E-mail</label>
-            <input name="email" type="email" required className="input" placeholder="voce@email.com" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Senha</label>
-            <input name="password" type="password" required minLength={6} className="input" placeholder="Mínimo 6 caracteres" />
-          </div>
-          {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-          <button type="submit" disabled={pending} className="btn-primary w-full">
-            {pending ? 'Cadastrando...' : 'Cadastrar'}
-          </button>
-        </form>
+        <div className="card">
+          <h1 className="heading-lg">Criar conta</h1>
+          <p className="mt-1 text-sm text-muted">Sua carteira será criada automaticamente</p>
 
-        <p className="mt-4 text-center text-sm text-slate-600">
-          Já tem conta?{' '}
-          <Link href="/login" className="font-medium text-brand-600 hover:underline">
-            Entrar
-          </Link>
-        </p>
+          <form action={formAction} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="name" className="label">
+                Nome
+              </label>
+              <input
+                id="name"
+                name="name"
+                type="text"
+                required
+                className="input"
+                placeholder="Seu nome"
+                autoComplete="name"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="label">
+                E-mail
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                className="input"
+                placeholder="voce@email.com"
+                autoComplete="email"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="label">
+                Senha
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                className="input"
+                placeholder="Mínimo 6 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+            {state.error && <div className="alert-error">{state.error}</div>}
+            <button type="submit" disabled={pending} className="btn-primary w-full">
+              {pending ? 'Cadastrando...' : 'Cadastrar'}
+            </button>
+          </form>
+
+          <div className="divider" />
+
+          <p className="text-center text-sm text-muted">
+            Já tem conta?{' '}
+            <Link href="/login" className="link-accent">
+              Entrar
+            </Link>
+          </p>
+        </div>
       </div>
-    </main>
+    </PageShell>
   );
 }
