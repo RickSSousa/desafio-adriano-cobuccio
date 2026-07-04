@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { apiRequest, ActionResult, AuthTokens, User, WalletBalance, Transaction, PaginatedTransactions } from '@/lib/api';
+import { apiRequest, ActionResult, AuthTokens, User, WalletBalance, Transaction, PaginatedTransactions, TransactionListFilters } from '@/lib/api';
 import { setAuthCookies, clearAuthCookies, getAccessToken } from '@/lib/auth-cookies';
 
 const registerSchema = z.object({
@@ -100,7 +100,7 @@ export async function getBalanceAction(): Promise<ActionResult<WalletBalance>> {
 
 export async function getTransactionsAction(
   page = 1,
-  search = '',
+  filters: TransactionListFilters = {},
 ): Promise<ActionResult<PaginatedTransactions>> {
   const accessToken = await getAccessToken();
   if (!accessToken) {
@@ -108,9 +108,18 @@ export async function getTransactionsAction(
   }
 
   const params = new URLSearchParams({ page: String(page) });
-  const trimmedSearch = search.trim();
+  const trimmedSearch = filters.search?.trim();
+  const trimmedStartDate = filters.startDate?.trim();
+  const trimmedEndDate = filters.endDate?.trim();
+
   if (trimmedSearch) {
     params.set('search', trimmedSearch);
+  }
+  if (trimmedStartDate) {
+    params.set('startDate', trimmedStartDate);
+  }
+  if (trimmedEndDate) {
+    params.set('endDate', trimmedEndDate);
   }
 
   return apiRequest<PaginatedTransactions>(`/transactions?${params}`, {

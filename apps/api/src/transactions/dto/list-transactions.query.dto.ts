@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export const DEFAULT_TRANSACTIONS_PAGE_SIZE = 5;
 
@@ -26,4 +26,16 @@ export class ListTransactionsQueryDto {
   @MaxLength(100)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   search?: string;
+
+  @ApiPropertyOptional({ description: 'Start date (inclusive), format YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  startDate?: string;
+
+  @ApiPropertyOptional({ description: 'End date (inclusive), format YYYY-MM-DD' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  endDate?: string;
 }

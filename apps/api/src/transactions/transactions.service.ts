@@ -12,6 +12,7 @@ import {
 } from '../wallet/repositories/wallet.repository.interface';
 import { DepositDto, TransferDto } from '../wallet/dto/wallet.dto';
 import { DEFAULT_TRANSACTIONS_PAGE_SIZE } from './dto/list-transactions.query.dto';
+import { TransactionListFilters } from './dto/transaction-list-filters.dto';
 import {
   TransactionNotFoundException,
   WalletNotFoundException,
@@ -119,13 +120,13 @@ export class TransactionsService {
     userId: string,
     page = 1,
     take = DEFAULT_TRANSACTIONS_PAGE_SIZE,
-    search?: string,
+    filters: TransactionListFilters = {},
   ) {
     const { items, total } = await this.transactionRepository.findByUserWalletPaginated(
       userId,
       page,
       take,
-      search,
+      filters,
     );
 
     return {
@@ -134,7 +135,9 @@ export class TransactionsService {
       take,
       total,
       hasMore: page * take < total,
-      search: search ?? '',
+      search: filters.search ?? '',
+      startDate: filters.startDate ?? '',
+      endDate: filters.endDate ?? '',
     };
   }
 

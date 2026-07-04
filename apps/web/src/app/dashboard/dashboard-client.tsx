@@ -10,7 +10,7 @@ import {
   logoutAction,
   getTransactionsAction,
 } from '@/app/actions/wallet.actions';
-import type { Transaction } from '@/lib/api';
+import type { Transaction, TransactionListFilters } from '@/lib/api';
 import { Logo } from '@/components/ui/logo';
 import { PageShell } from '@/components/ui/page-shell';
 import { StatusBadge, TypeBadge } from '@/components/ui/badge';
@@ -38,6 +38,16 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+const EMPTY_TRANSACTION_FILTERS: TransactionListFilters = {
+  search: '',
+  startDate: '',
+  endDate: '',
+};
+
+function hasActiveFilters(filters: TransactionListFilters) {
+  return Boolean(filters.search?.trim() || filters.startDate?.trim() || filters.endDate?.trim());
+}
+
 export function DashboardClient({
   balance,
   initialTransactions,
@@ -51,8 +61,10 @@ export function DashboardClient({
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(initialPage);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filter, setFilter] = useState('');
-  const [debouncedFilter, setDebouncedFilter] = useState('');
+  const [filters, setFilters] = useState<TransactionListFilters>(EMPTY_TRANSACTION_FILTERS);
+  const [debouncedFilters, setDebouncedFilters] = useState<TransactionListFilters>(
+    EMPTY_TRANSACTION_FILTERS,
+  );
   const [filtering, setFiltering] = useState(false);
   const skipFilterFetch = useRef(true);
   const [depositState, depositFormAction, depositPending] = useActionState(depositAction, {
@@ -68,13 +80,25 @@ export function DashboardClient({
   const wasTransferPending = useRef(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedFilter(filter.trim()), 300);
+    const timer = setTimeout(() => setDebouncedFilters(filters), 300);
     return () => clearTimeout(timer);
-  }, [filter]);
+  }, [filters]);
 
-  const reloadTransactions = useCallback(async (search: string) => {
+  const reloadTransactions = useCallback(async (activeFilters: TransactionListFilters) => {
+    const startDate = activeFilters.startDate?.trim() ?? '';
+    const endDate = activeFilters.endDate?.trim() ?? '';
+
+    if (startDate && endDate && startDate > endDate) {
+      toast.error('Data inicial não pode ser posterior à data final');
+      return;
+    }
+
     setFiltering(true);
-    const result = await getTransactionsAction(1, search);
+    const result = await getTransactionsAction(1, {
+      search: activeFilters.search?.trim(),
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
     setFiltering(false);
 
     if (!result.success || !result.data) {
@@ -89,13 +113,13 @@ export function DashboardClient({
   }, []);
 
   useEffect(() => {
-    if (!debouncedFilter) {
+    if (!hasActiveFilters(debouncedFilters)) {
       setTransactions(initialTransactions);
       setHasMore(initialHasMore);
       setTotal(initialTotal);
       setPage(initialPage);
     }
-  }, [initialTransactions, initialHasMore, initialTotal, initialPage, debouncedFilter]);
+  }, [initialTransactions, initialHasMore, initialTotal, initialPage, debouncedFilters]);
 
   useEffect(() => {
     if (skipFilterFetch.current) {
@@ -103,8 +127,8 @@ export function DashboardClient({
       return;
     }
 
-    void reloadTransactions(debouncedFilter);
-  }, [debouncedFilter, reloadTransactions]);
+    void reloadTransactions(debouncedFilters);
+  }, [debouncedFilters, reloadTransactions]);
 
   useEffect(() => {
     if (wasDepositPending.current && !depositPending) {
@@ -112,13 +136,13 @@ export function DashboardClient({
         toast.success('Depósito realizado!');
         setDepositAmountKey((key) => key + 1);
         router.refresh();
-        void reloadTransactions(debouncedFilter);
+        void reloadTransactions(debouncedFilters);
       } else if (depositState.error) {
         toast.error(depositState.error);
       }
     }
     wasDepositPending.current = depositPending;
-  }, [depositPending, depositState.success, depositState.error, router, debouncedFilter, reloadTransactions]);
+  }, [depositPending, depositState.success, depositState.error, router, debouncedFilters, reloadTransactions]);
 
   useEffect(() => {
     if (wasTransferPending.current && !transferPending) {
@@ -126,18 +150,22 @@ export function DashboardClient({
         toast.success('Transferência realizada!');
         setTransferAmountKey((key) => key + 1);
         router.refresh();
-        void reloadTransactions(debouncedFilter);
+        void reloadTransactions(debouncedFilters);
       } else if (transferState.error) {
         toast.error(transferState.error);
       }
     }
     wasTransferPending.current = transferPending;
-  }, [transferPending, transferState.success, transferState.error, router, debouncedFilter, reloadTransactions]);
+  }, [transferPending, transferState.success, transferState.error, router, debouncedFilters, reloadTransactions]);
 
   const handleLoadMore = () => {
     startTransition(async () => {
       setLoadingMore(true);
-      const result = await getTransactionsAction(page + 1, debouncedFilter);
+      const result = await getTransactionsAction(page + 1, {
+        search: debouncedFilters.search?.trim(),
+        startDate: debouncedFilters.startDate?.trim() || undefined,
+        endDate: debouncedFilters.endDate?.trim() || undefined,
+      });
       setLoadingMore(false);
 
       if (!result.success || !result.data) {
@@ -161,13 +189,17 @@ export function DashboardClient({
       }
       toast.success('Transação revertida!');
       router.refresh();
-      void reloadTransactions(debouncedFilter);
+      void reloadTransactions(debouncedFilters);
     });
+  };
+
+  const handleClearFilters = () => {
+    setFilters(EMPTY_TRANSACTION_FILTERS);
   };
 
   const balanceNumber = Number(balance);
   const isNegative = balanceNumber < 0;
-  const isFiltering = debouncedFilter.length > 0;
+  const isFiltering = hasActiveFilters(debouncedFilters);
 
   return (
     <PageShell wide>
@@ -270,32 +302,79 @@ export function DashboardClient({
       </section>
 
       <section className="card">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="heading-md">Histórico de transações</h2>
-            <span className="text-xs text-vault-500">Ledger append-only</span>
+        <div className="mb-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="heading-md">Histórico de transações</h2>
+              <span className="text-xs text-vault-500">Ledger append-only</span>
+            </div>
+            {isFiltering && (
+              <button type="button" onClick={handleClearFilters} className="btn-ghost self-start text-xs">
+                Limpar filtros
+              </button>
+            )}
           </div>
-          <div className="relative w-full sm:max-w-xs">
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-500"
-              aria-hidden
-            >
-              <path
-                fillRule="evenodd"
-                d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
-                clipRule="evenodd"
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_10rem_10rem]">
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label htmlFor="transaction-search" className="label text-xs">
+                Buscar
+              </label>
+              <div className="relative">
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-500"
+                  aria-hidden
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <input
+                  id="transaction-search"
+                  type="search"
+                  value={filters.search ?? ''}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, search: event.target.value }))
+                  }
+                  className="input pl-9"
+                  placeholder="Descrição, tipo, status..."
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="start-date" className="label text-xs">
+                De
+              </label>
+              <input
+                id="start-date"
+                type="date"
+                value={filters.startDate ?? ''}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, startDate: event.target.value }))
+                }
+                className="input"
               />
-            </svg>
-            <input
-              type="search"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              className="input pl-9"
-              placeholder="Filtrar por descrição, tipo, status..."
-              aria-label="Filtrar transações"
-            />
+            </div>
+
+            <div>
+              <label htmlFor="end-date" className="label text-xs">
+                Até
+              </label>
+              <input
+                id="end-date"
+                type="date"
+                value={filters.endDate ?? ''}
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, endDate: event.target.value }))
+                }
+                className="input"
+              />
+            </div>
           </div>
         </div>
 
@@ -317,7 +396,7 @@ export function DashboardClient({
             </div>
             <p className="text-sm text-muted">
               {isFiltering
-                ? 'Nenhuma transação encontrada para esse filtro.'
+                ? 'Nenhuma transação encontrada para os filtros aplicados.'
                 : 'Nenhuma transação registrada ainda.'}
             </p>
             {!isFiltering && (

@@ -16,12 +16,11 @@ export class TransactionsController {
   @Get()
   @ApiOperation({ summary: 'List user transactions (paginated)' })
   list(@CurrentUser() user: JwtPayload, @Query() query: ListTransactionsQueryDto) {
-    return this.transactionsService.listByUser(
-      user.sub,
-      query.page,
-      query.take,
-      query.search,
-    );
+    return this.transactionsService.listByUser(user.sub, query.page, query.take, {
+      search: query.search,
+      startDate: query.startDate,
+      endDate: query.endDate,
+    });
   }
 
   @Post('deposit')

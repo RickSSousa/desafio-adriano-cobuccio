@@ -36,6 +36,12 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface TransactionListFilters {
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface PaginatedTransactions {
   items: Transaction[];
   page: number;
@@ -43,6 +49,8 @@ export interface PaginatedTransactions {
   total: number;
   hasMore: boolean;
   search: string;
+  startDate: string;
+  endDate: string;
 }
 
 export const TRANSACTIONS_PAGE_SIZE = 5;

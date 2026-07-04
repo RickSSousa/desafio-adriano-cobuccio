@@ -1,4 +1,5 @@
 import { Transaction, Prisma, TransactionType } from '@prisma/client';
+import { TransactionListFilters } from '../dto/transaction-list-filters.dto';
 
 export type TransactionWithWallets = Transaction & {
   senderWallet?: { id: string; userId: string } | null;
@@ -12,7 +13,7 @@ export interface ITransactionRepository {
     userId: string,
     page: number,
     take: number,
-    search?: string,
+    filters?: TransactionListFilters,
   ): Promise<{ items: TransactionWithWallets[]; total: number }>;
   create(
     tx: Prisma.TransactionClient,

@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.module';
 import { ITransactionRepository } from './transaction.repository.interface';
 import { buildTransactionSearchFilter } from '../utils/transaction-search.util';
+import { buildTransactionDateRangeFilter } from '../utils/transaction-date-range.util';
+import { TransactionListFilters } from '../dto/transaction-list-filters.dto';
 
 @Injectable()
 export class TransactionRepository implements ITransactionRepository {
@@ -22,21 +24,37 @@ export class TransactionRepository implements ITransactionRepository {
     return this.prisma.transaction.findUnique({ where: { idempotencyKey: key } });
   }
 
-  private userWalletWhere(userId: string, search?: string): Prisma.TransactionWhereInput {
+  private userWalletWhere(userId: string, filters?: TransactionListFilters): Prisma.TransactionWhereInput {
     const walletScope: Prisma.TransactionWhereInput = {
       OR: [{ senderWallet: { userId } }, { receiverWallet: { userId } }],
     };
 
-    const searchFilter = buildTransactionSearchFilter(search);
-    if (!searchFilter) {
+    const conditions: Prisma.TransactionWhereInput[] = [walletScope];
+
+    const searchFilter = buildTransactionSearchFilter(filters?.search);
+    if (searchFilter) {
+      conditions.push(searchFilter);
+    }
+
+    const dateFilter = buildTransactionDateRangeFilter(filters?.startDate, filters?.endDate);
+    if (dateFilter) {
+      conditions.push(dateFilter);
+    }
+
+    if (conditions.length === 1) {
       return walletScope;
     }
 
-    return { AND: [walletScope, searchFilter] };
+    return { AND: conditions };
   }
 
-  async findByUserWalletPaginated(userId: string, page: number, take: number, search?: string) {
-    const where = this.userWalletWhere(userId, search);
+  async findByUserWalletPaginated(
+    userId: string,
+    page: number,
+    take: number,
+    filters?: TransactionListFilters,
+  ) {
+    const where = this.userWalletWhere(userId, filters);
     const skip = (page - 1) * take;
 
     const [items, total] = await Promise.all([
