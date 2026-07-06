@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+coverage
+**/.turbo
+.git
+.env
+.env.*
+!.env.example
+*.md
+!apps/api/prisma/**
+**/*.spec.ts
+**/test
